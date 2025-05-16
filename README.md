@@ -1,6 +1,17 @@
 # lightroom-selector
 撮り溜めた写真をMLモデルに自動で選別させて、Lightroomの星とフラグを自動でつけるプラグイン
 
+## 要件
+
+要件 | 具体化
+---|---
+Lightroom Classic | Lightroom CC ではなく Classic 版を使用
+Lightroom クラウド版 で溜めた RAW を対象 | Classic に同期 → スマートプレビュー生成 が最速＆公式 API 不要
+I/O を抑えつつ 1,000+ 枚をふるいにかける | プレビュー JPEG (~2 MP) だけを Python で読む
+スコア 4 層 (構図 > 主題ピント > 三分割距離 > ヒストグラム) | score = w1*t1 + w2*t2 + … で正規化・合算
+似た構図はクラスタリング後、各クラスから代表を残す | perceptual hash で類似判定 → さらに CLIP 埋め込みで refine
+選別結果は LR に星／カラーラベルで反映 | XMP サイドカー の <xmp:Rating> を書いて Classic へ再読み込み
+
 
 ## 使い方
 
