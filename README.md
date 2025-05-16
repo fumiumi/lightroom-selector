@@ -1,0 +1,2 @@
+# lightroom-selector
+撮り溜めた写真をMLモデルに自動で選別させて、Lightroomの星とフラグを自動でつけるプラグイン
