@@ -29,7 +29,7 @@ Lightroom スマートプレビュー（JPEG, ~2048px）を対象に
                   torch, ultralytics(yolov8), piexif (XMP 書込み用)
 
 使い方：
-$ python selector_pipeline.py --preview-dir ./SmartPreviews --output-dir ./xmp_out \
+$ python selector_pipeline.py --preview-dir "スマートプレビューのlrdataのディレクトリ" --output-dir ./xmp_out \
       --clusters 50 --topk 3
 
 ‑‑preview-dir  : Lightroom で生成したプレビューファイル群（JPEG）のルート

@@ -45,7 +45,28 @@ from ultralytics import YOLO  # yolov8
 # ========================= Utility ============================
 
 def load_image(path: Path) -> np.ndarray:
-    """OpenCV 形式で画像読み込み (BGR)."""
+    """OpenCV 形式で画像読み込み (BGR). DNG は rawpy で処理"""
+    ext = path.suffix.lower()
+    # Raw (.dng) は rawpy で現像
+    if ext == ".dng":
+        try:
+            import rawpy
+            # RawPy で現像
+            with rawpy.imread(str(path)) as raw:
+                rgb = raw.postprocess()
+            return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        except ImportError:
+            raise RuntimeError("rawpy が見つかりません: pip install rawpy")
+        except Exception as e:
+            # rawpy がサポートしないスマートプレビュー等の場合は PIL でフォールバック
+            try:
+                img_pil = Image.open(str(path))
+                rgb = np.array(img_pil)
+                return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+            except Exception:
+                raise RuntimeError(f"Failed to open DNG (rawpy, PIL 共にNG): {path}") from e
+
+    # JPEG 等は OpenCV で読み込み
     img = cv2.imread(str(path))
     if img is None:
         raise RuntimeError(f"Failed to open {path}")
@@ -54,7 +75,7 @@ def load_image(path: Path) -> np.ndarray:
 # ---- Histogram / Exposure -----------------------------------
 
 def exposure_score(img: np.ndarray) -> float:
-    """クリップ率から露出バランスを 0‑1 で返す"""
+    """クリップ率から露出バランスを 0-1 で返す"""
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     hist = cv2.calcHist([gray], [0], None, [256], [0, 256]).ravel()
     total = hist.sum()
@@ -66,7 +87,7 @@ def exposure_score(img: np.ndarray) -> float:
 # ---- Composition --------------------------------------------
 
 def thirds_alignment_score(bbox, img_shape) -> float:
-    """被写体 bbox と三分割交点の距離で 0‑1."""
+    """被写体 bbox と三分割交点の距離で 0-1."""
     h, w = img_shape[:2]
     cx = (bbox[0] + bbox[2]) / 2
     cy = (bbox[1] + bbox[3]) / 2
@@ -94,7 +115,7 @@ def detect_subject(img: np.ndarray):
 # ---- Perceptual Hash for clustering --------------------------
 
 def hash_vector(path: Path) -> np.ndarray:
-    """pHash を 64‑bit -> 64‑dim 0/1 ベクトル化"""
+    """pHash を 64-bit -> 64-dim 0/1 ベクトル化"""
     img = Image.open(path)
     ph = imagehash.phash(img, hash_size=8)  # 64 bits
     # convert to vector of 0/1
@@ -137,7 +158,7 @@ class PhotoScore:
 # ========================= Main ===============================
 
 def main():
-    parser = argparse.ArgumentParser(description="Auto‑select best photos from Lightroom previews")
+    parser = argparse.ArgumentParser(description="Auto-select best photos from Lightroom previews")
     parser.add_argument("--preview-dir", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--clusters", type=int, default=50)
@@ -150,7 +171,7 @@ def main():
 
     # 1. 読み込み & スコア計算
     photos: List[PhotoScore] = []
-    for p in args.preview_dir.rglob("*.jpg"):
+    for p in args.preview_dir.rglob("*.dng"): # Lightroom のプレビューファイル
         ps = PhotoScore(p)
         ps.evaluate(weights)
         photos.append(ps)
@@ -170,10 +191,27 @@ def main():
         plist.sort(key=lambda x: x.total, reverse=True)
         selected.extend(plist[:args.topk])
 
-    # 4. XMP 書込み placeholder (TODO)
+    # 4. XMP サイドカーに評価を書き込み
     for ps in selected:
         print(f"★ SELECTED {ps.path.name} score={ps.total:.2f}")
-        # TODO: generate XMP with rating=5 and save to output_dir
+        # --------------------------------------------------
+        # ● XMPサイドカーの生成
+        # Lightroom は同名 .xmp を横に置くことで評価を読み込みます
+        rating = 5
+        xmp_path = args.output_dir / f"{ps.path.stem}.xmp"
+        # XMP のヘッダー／RDF 部分に Rating 属性を埋め込む
+        xmp_content = f'''<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description rdf:about=""
+      xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+      xmp:Rating="{rating}"/>
+  </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>'''
+        # ファイルへ書き出し
+        xmp_path.write_text(xmp_content, encoding="utf-8")
+        print(f"  -> Wrote XMP: {xmp_path}")
 
     print(f"\nFinished. Selected {len(selected)} / {len(photos)} shots.")
 
