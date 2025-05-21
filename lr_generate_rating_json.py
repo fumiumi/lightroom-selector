@@ -1,30 +1,10 @@
-#!/usr/bin/env python3
+# lr_generate_rating_json.py
 """
-selector_pipeline.py
-====================
-Lightroom スマートプレビュー（JPEG, ~2048px）を対象に
-1. 類似構図クラスタリング
-2. 主題・構図・露出スコアリング
-3. クラスタ内で上位カットを選定
-4. XMP サイドカーに ★レーティングを書き込み
-までを一気通貫で実行するスケルトン。
-
-まだ TODO が多いけど、骨組みはこれでOK！
-依存ライブラリ：opencv‑python, pillow, imagehash, numpy, scikit‑learn,
-                  torch, ultralytics(yolov8), piexif (XMP 書込み用)
-
-使い方：
-$ python selector_pipeline.py --preview-dir ./SmartPreviews --output-dir ./xmp_out \
-      --clusters 50 --topk 3
-
-‑‑preview-dir  : Lightroom で生成したプレビューファイル群（JPEG）のルート
-‑‑output-dir   : レーティングを書き込んだ XMP を吐き出す場所
-‑‑clusters     : KMeans のクラスタ数（お好みで）
-‑‑topk         : 各クラスタからピックする枚数
-‑‑weights      : スコア重み JSON 文字列 (optional)
-
-step‑by‑step の詳細は README.md or チャット本文を参照！
+YOLO modelを使って、Lightroomのプレビューファイルからベストショットを選ぶスクリプト
+json形式で評価スコアを出力
+jsonはluasスクリプトのLightroomプラグインに渡す
 """
+
 
 from __future__ import annotations
 import argparse
@@ -40,7 +20,6 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 import torch
 from ultralytics import YOLO  # yolov8
-# TODO: piexif で XMP 書込み or ExifTool ラッパ
 
 # ========================= Utility ============================
 
@@ -191,27 +170,27 @@ def main():
         plist.sort(key=lambda x: x.total, reverse=True)
         selected.extend(plist[:args.topk])
 
-    # 4. XMP サイドカーに評価を書き込み
+    # 4. JSON 形式で評価結果を出力
+    results = []
     for ps in selected:
-        print(f"★ SELECTED {ps.path.name} score={ps.total:.2f}")
-        # --------------------------------------------------
-        # ● XMPサイドカーの生成
-        # Lightroom は同名 .xmp を横に置くことで評価を読み込みます
-        rating = 5
-        xmp_path = args.output_dir / f"{ps.path.stem}.xmp"
-        # XMP のヘッダー／RDF 部分に Rating 属性を埋め込む
-        xmp_content = f'''<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>
-<x:xmpmeta xmlns:x="adobe:ns:meta/">
-  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
-    <rdf:Description rdf:about=""
-      xmlns:xmp="http://ns.adobe.com/xap/1.0/"
-      xmp:Rating="{rating}"/>
-  </rdf:RDF>
-</x:xmpmeta>
-<?xpacket end="w"?>'''
-        # ファイルへ書き出し
-        xmp_path.write_text(xmp_content, encoding="utf-8")
-        print(f"  -> Wrote XMP: {xmp_path}")
+        # スコアに応じて星評価を3～5で割り当て
+        if ps.total >= 0.8:
+            star = 5
+        elif ps.total >= 0.6:
+            star = 4
+        else:
+            star = 3
+        results.append({
+            "file": ps.path.name,
+            "score": round(ps.total, 4),
+            "rating": star
+        })
+    # JSON ファイルへ書き出し
+    json_path = args.output_dir / "ratings.json"
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(results, f, ensure_ascii=False, indent=2)
+    print(f"Wrote JSON: {json_path}")
 
     print(f"\nFinished. Selected {len(selected)} / {len(photos)} shots.")
 
