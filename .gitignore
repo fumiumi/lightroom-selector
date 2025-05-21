@@ -183,3 +183,8 @@ json_out/
 # ML models
 *.pt
 
+# cache
+*.cache
+.DS_Store
+*.egg-info/
+*.egg
