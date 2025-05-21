@@ -188,3 +188,6 @@ json_out/
 .DS_Store
 *.egg-info/
 *.egg
+
+# local env files
+local_data/
