@@ -178,6 +178,8 @@ cython_debug/
 
 # results
 xmp_out/
+json_out/
 
 # ML models
 *.pt
+
