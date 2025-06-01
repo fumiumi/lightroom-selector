@@ -3,21 +3,29 @@
 
 ## 使い方
 
-lr_generate_rating_json.py 
-====================
-Lightroom スマートプレビュー（dng, ~2048px）を対象に
-1. 類似構図クラスタリング
-2. 主題・構図・露出スコアリング
-3. クラスタ内で上位カットを選定
-4. XMP サイドカーに ★レーティングを書き込み
-までを一気通貫で実行するスケルトン。
+### 使用するPythonバージョン
+
+3.11を使用する。スクリプトで使用しているtensorflowが3.13をサポートしていないため。
+
+プロジェクト内にPython 3.11 で仮想環境を作成し、仮想環境をアクティベート
+
+```bash
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+### 必要なライブラリをインストール
+
+```bash
+pip install opencv-python pillow imagehash numpy scikit-learn torch ultralytics piexif rich tensorflow
+```
 
 ### コマンド
 
 ```bash
-python lr_generate_rating_json.py 
+py -3.11 lr_generate_rating_json.py 
 --preview-dir "スマートプレビューのlrdataのディレクトリ" \
---output-dir ./xmp_out \
+--output-dir ./json_out \
 --clusters 50 --topk 3
 ```
 
